@@ -55,28 +55,38 @@ unitRange = float -1 1
 
 
 {-| Create a generator of floats that is normally distributed with
-given minimum, maximum, and standard deviation.
+given the mean, and standard deviation.
 -}
-normal : Float -> Float -> Float -> Generator Float
-normal start end standardDeviation =
-  let normalDistribution mean stdDev x =
-        if stdDev == 0 then x
-        else
-          let scale = 1 / (stdDev * sqrt (2 * pi))
-              exponent = ((x - mean) * (x - mean)) / (2 * stdDev * stdDev)
-          in
-            scale * (e ^ -exponent)
-
-  in
-    map (normalDistribution ((end - start) / 2) standardDeviation) (float start end)
+normal : Float -> Float -> Generator Float
+normal mean standardDeviation = map (\x -> x*standardDeviation + mean) standardNormal
 
 {-| Generator that follows a standard normal distribution (as opposed to
 a uniform distribution)
 -}
 standardNormal : Generator Float
-standardNormal = normal (toFloat minInt + 1) (toFloat maxInt) 1
+standardNormal =
+    -- This is the polar Box-Muller algorithm as described here http://www.design.caltech.edu/erik/Misc/Gaussian.html
+    -- There may be more efficient and more correct algorithms; see here http://stackoverflow.com/questions/75677/converting-a-uniform-distribution-to-a-normal-distribution
+    let
+        loop seed =
+            let
+                (r1,seed') = generate (float 0 1) seed
+                (r2,seed'') = generate (float 0 1) seed'
+                x1 = 2.0 * r1 - 1.0
+                x2 = 2.0 * r2 - 1.0
+                w = x1*x1 + x2*x2
+            in
+                if | w >= 1.0 -> loop seed''
+                   | otherwise ->
+                        let
+                            w' = sqrt (-2.0 * (logBase 10 w) / w)
+                            y1 = x1 * w
+                        in
+                            (y1, seed'')
+    in
+        customGenerator loop
 
 {-| Alias for `normal`.
 -}
-gaussian : Float -> Float -> Float -> Generator Float
+gaussian : Float -> Float -> Generator Float
 gaussian = normal
